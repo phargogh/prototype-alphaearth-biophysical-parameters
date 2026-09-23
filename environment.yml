@@ -1,0 +1,20 @@
+# Runtime environment for the AlphaEarth -> InVEST biophysical parameter scripts.
+# Create it inside this repository (see README.md):
+#   mamba env create --prefix ./.mamba-env --file environment.yml --yes
+name: alphaearth-invest
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - geopandas>=1.0     # reads InVEST watershed / AOI vectors (shapefile, gpkg, geojson)
+  - pyarrow            # reads the AlphaEarth GeoParquet tile index
+  - rasterio>=1.4      # raster I/O; remote COG/VRT reads through GDAL
+  - gdal               # CLI inspection of outputs (gdalinfo)
+  - scikit-learn>=1.6  # random forest and grouped (spatial-block) cross-validation
+  - h5py               # reads GEDI L4A granules
+  - earthaccess>=0.12  # NASA Earthdata search, login, and GEDI download
+  - requests
+  - pytest
+  - pip
+  - pip:
+      - --editable .   # installs the shared alphaearth_invest package from this repo

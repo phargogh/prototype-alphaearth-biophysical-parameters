@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alphaearth-invest"
+version = "0.1.0"
+description = "Predict InVEST biophysical input layers from Google AlphaEarth satellite embeddings"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["alphaearth_invest*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "aboveground_carbon", "soil_erodibility", "plant_available_water_content"]
+markers = ["network: reads public data over the internet (set NETWORK_TESTS=1)"]
