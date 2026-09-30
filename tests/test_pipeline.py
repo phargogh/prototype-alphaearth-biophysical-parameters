@@ -1,3 +1,5 @@
+from argparse import Namespace
+
 import numpy as np
 import pytest
 import rasterio
@@ -5,7 +7,7 @@ import shapely
 from sklearn.dummy import DummyRegressor
 
 from alphaearth_invest.embeddings import RAW_NODATA
-from alphaearth_invest.invest_raster import NODATA
+from alphaearth_invest.invest_raster import NODATA, ParameterSpec
 from alphaearth_invest import pipeline
 from alphaearth_invest.grid import OutputGrid
 
@@ -50,6 +52,11 @@ def test_regression_metrics_for_known_errors():
     assert metrics["r2"] == pytest.approx(0)
 
 
+def test_regression_metrics_report_undefined_r2_for_constant_observations():
+    metrics = pipeline.regression_metrics(np.array([2.0, 2.0, 2.0]), np.array([1.0, 2.0, 3.0]))
+    assert metrics["r2"] is None
+
+
 def test_cross_validation_separates_signal_from_noise():
     rng = np.random.default_rng(0)
     features = rng.normal(size=(400, 64)).astype(np.float32)
@@ -66,6 +73,22 @@ def test_cross_validation_needs_enough_blocks():
     features = np.zeros((200, 64))
     with pytest.raises(pipeline.InsufficientSamplesError, match="blocks"):
         pipeline.cross_validate(features, np.arange(200.0), np.zeros(200, dtype=int), pipeline.TrainingConfig())
+
+
+@pytest.mark.parametrize("crs", ["EPSG:4326", "EPSG:2263"])
+def test_run_rejects_non_metric_output_crs(crs):
+    args = Namespace(
+        sample_size=1,
+        folds=2,
+        block_size_m=1.0,
+        trees=1,
+        seed=1,
+        aoi=None,
+        bbox=[-122.0, 37.0, -121.0, 38.0],
+        crs=crs,
+    )
+    with pytest.raises(ValueError, match="projected with metre units"):
+        pipeline.run(args, ParameterSpec("test", "units", "model"), lambda *_: None)
 
 
 def test_training_samples_drop_points_outside_aoi_or_without_embedding(tmp_path, grid):
@@ -111,4 +134,15 @@ def test_prediction_refuses_a_stack_on_another_grid(tmp_path, grid):
     model = DummyRegressor().fit(np.zeros((1, 64)), [0.0])
     with pytest.raises(RuntimeError, match="not on the output grid"):
         pipeline.predict_to_geotiff(model, stack, shapely.box(500000, 4000000, 500200, 4000100), grid, tmp_path / "p.tif", "x")
+    assert not (tmp_path / "p.tif").exists()
+
+
+def test_prediction_refuses_stack_with_different_crs_and_same_grid(tmp_path, grid):
+    other_crs = OutputGrid("EPSG:32611", grid.transform, grid.width, grid.height)
+    stack = write_stack(tmp_path / "stack.tif", other_crs, np.zeros((64, grid.height, grid.width), dtype=np.int8))
+    model = DummyRegressor().fit(np.zeros((1, 64)), [0.0])
+    with pytest.raises(RuntimeError, match="not on the output grid"):
+        pipeline.predict_to_geotiff(
+            model, stack, shapely.box(500000, 4000000, 500200, 4000100), grid, tmp_path / "p.tif", "x"
+        )
     assert not (tmp_path / "p.tif").exists()

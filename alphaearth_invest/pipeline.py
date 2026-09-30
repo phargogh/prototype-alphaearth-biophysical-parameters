@@ -122,7 +122,7 @@ def regression_metrics(observed: np.ndarray, predicted: np.ndarray) -> dict:
         "rmse": float(np.sqrt(sse / len(observed))),
         "mae": float(np.mean(np.abs(error))),
         "bias": float(np.mean(error)),
-        "r2": 1 - sse / sst,
+        "r2": None if sst == 0 else 1 - sse / sst,
         "observed_mean": float(observed.mean()),
         "observed_min": float(observed.min()),
         "observed_max": float(observed.max()),
@@ -194,7 +194,12 @@ def predict_to_geotiff(
     }
     with atomic_output(path) as temporary:
         with rasterio.open(stack_path) as stack, rasterio.open(temporary, "w", **profile) as output:
-            if (stack.transform, stack.width, stack.height) != (grid.transform, grid.width, grid.height):
+            if (stack.crs, stack.transform, stack.width, stack.height) != (
+                rasterio.crs.CRS.from_user_input(grid.crs),
+                grid.transform,
+                grid.width,
+                grid.height,
+            ):
                 raise RuntimeError(f"{stack_path} is not on the output grid")
             output.set_band_description(1, band_name)
             for window in grid.windows():
@@ -258,6 +263,9 @@ def run(
     )
     aoi = aoi_from_vector(args.aoi) if args.aoi else aoi_from_bbox(*args.bbox)
     crs = args.crs or utm_crs_for(aoi)
+    output_crs = rasterio.crs.CRS.from_user_input(crs)
+    if not output_crs.is_projected or output_crs.linear_units != "metre":
+        raise ValueError("Output CRS must be projected with metre units")
     aoi_projected = aoi_in_crs(aoi, crs)
     grid = OutputGrid.covering(aoi_projected, crs)
 
